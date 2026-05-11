@@ -9,7 +9,7 @@ app = FastAPI()
 # Tiny model (FAST + small)
 generator = pipeline(
     "text-generation",
-    model="sshleifer/tiny-gpt2"
+    model="microsoft/phi-1_5"
 )
 
 class Query(BaseModel):
