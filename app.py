@@ -1,10 +1,10 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-import requests
 import os
 from dotenv import load_dotenv
 import uvicorn
+from groq import Groq
 
 # Load environment variables from server/.env regardless of current working directory.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -21,7 +21,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-API_KEY = os.getenv("API_KEY")
+API_KEY = os.getenv("GROQ_API_KEY") or os.getenv("API_KEY")
 MODEL_NAME = os.getenv("MODEL_NAME", "llama-3.1-8b-instant")
 
 class Query(BaseModel):
@@ -34,49 +34,27 @@ def root():
 @app.post("/chat")
 def chat(q: Query):
     if not API_KEY:
-        raise HTTPException(status_code=500, detail="Missing API_KEY. Set it in server/.env")
+        raise HTTPException(status_code=500, detail="Missing GROQ_API_KEY (or API_KEY). Set it in server/.env")
 
     try:
-        response = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": MODEL_NAME,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": "You are a helpful and concise assistant.",
-                    },
-                    {
-                        "role": "user",
-                        "content": q.message,
-                    },
-                ],
-                "temperature": 0.3,
-            },
-            timeout=30,
+        client = Groq(api_key=API_KEY)
+        completion = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a helpful and concise assistant.",
+                },
+                {
+                    "role": "user",
+                    "content": q.message,
+                },
+            ],
+            temperature=0.3,
         )
-        response.raise_for_status()
-        data = response.json()
-        return {"response": data["choices"][0]["message"]["content"]}
-    except requests.exceptions.HTTPError as exc:
-        error_body = ""
-        if exc.response is not None:
-            try:
-                error_body = exc.response.text
-            except Exception:
-                error_body = ""
-        raise HTTPException(
-            status_code=502,
-            detail=f"Upstream request failed: {exc}. Response body: {error_body}",
-        ) from exc
-    except requests.exceptions.RequestException as exc:
+        return {"response": completion.choices[0].message.content}
+    except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Upstream request failed: {exc}") from exc
-    except (KeyError, IndexError, TypeError) as exc:
-        raise HTTPException(status_code=502, detail="Unexpected response format from upstream API") from exc
 
 
 if __name__ == "__main__":
