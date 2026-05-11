@@ -10,10 +10,10 @@ load_dotenv()
 
 app = FastAPI()
 
-# ✅ CORS configuration
+# CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # ⚠️ change this in production
+    allow_origins=["*"],  # Change in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -26,7 +26,7 @@ class Query(BaseModel):
 
 @app.get("/")
 def root():
-    return {"status": "✅ LLM API running with CORS"}
+    return {"status": "LLM API running with CORS"}
 
 @app.post("/chat")
 def chat(q: Query):
@@ -61,8 +61,3 @@ def chat(q: Query):
 
     except Exception as e:
         return {"error": str(e)}
-    uvicorn.run(
-        "app:app",
-        host="0.0.0.0",
-        port=port
-    )
