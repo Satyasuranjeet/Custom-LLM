@@ -1,40 +1,66 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-from transformers import pipeline
+from fastapi.middleware.cors import CORSMiddleware
+import requests
 import os
-import uvicorn
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 app = FastAPI()
 
-# Tiny model (FAST + small)
-generator = pipeline(
-    "text-generation",
-    model="microsoft/phi-1_5"
+# ✅ CORS configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # ⚠️ change this in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+
+API_KEY = os.getenv("API_KEY")
 
 class Query(BaseModel):
     message: str
 
-@app.post("/chat")
-def chat(q: Query):
-    response = generator(
-        q.message,
-        max_length=100,
-        num_return_sequences=1
-    )
-
-    return {
-        "response": response[0]["generated_text"]
-    }
-
 @app.get("/")
 def root():
-    return {"status": "LLM API running"}
+    return {"status": "✅ LLM API running with CORS"}
 
-# IMPORTANT FOR RENDER
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
+@app.post("/chat")
+def chat(q: Query):
+    try:
+        response = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "llama3-8b-8192",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are a helpful and concise assistant."
+                    },
+                    {
+                        "role": "user",
+                        "content": q.message
+                    }
+                ],
+                "temperature": 0.3
+            }
+        )
 
+        data = response.json()
+
+        return {
+            "response": data["choices"][0]["message"]["content"]
+        }
+
+    except Exception as e:
+        return {"error": str(e)}
     uvicorn.run(
         "app:app",
         host="0.0.0.0",
