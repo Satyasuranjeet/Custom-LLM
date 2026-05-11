@@ -22,6 +22,7 @@ app.add_middleware(
 )
 
 API_KEY = os.getenv("API_KEY")
+MODEL_NAME = os.getenv("MODEL_NAME", "llama-3.1-8b-instant")
 
 class Query(BaseModel):
     message: str
@@ -43,7 +44,7 @@ def chat(q: Query):
                 "Content-Type": "application/json",
             },
             json={
-                "model": "llama3-8b-8192",
+                "model": MODEL_NAME,
                 "messages": [
                     {
                         "role": "system",
@@ -61,6 +62,17 @@ def chat(q: Query):
         response.raise_for_status()
         data = response.json()
         return {"response": data["choices"][0]["message"]["content"]}
+    except requests.exceptions.HTTPError as exc:
+        error_body = ""
+        if exc.response is not None:
+            try:
+                error_body = exc.response.text
+            except Exception:
+                error_body = ""
+        raise HTTPException(
+            status_code=502,
+            detail=f"Upstream request failed: {exc}. Response body: {error_body}",
+        ) from exc
     except requests.exceptions.RequestException as exc:
         raise HTTPException(status_code=502, detail=f"Upstream request failed: {exc}") from exc
     except (KeyError, IndexError, TypeError) as exc:
@@ -68,5 +80,5 @@ def chat(q: Query):
 
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", "8000a"))
+    port = int(os.getenv("PORT", "8000"))
     uvicorn.run("app:app", host="0.0.0.0", port=port)
